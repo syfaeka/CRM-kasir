@@ -18,6 +18,11 @@ class TransactionModel extends Model
         'customer_id',
         'user_id',
         'total_amount',
+        'subtotal',
+        'tax',
+        'payment_method',
+        'cash_received',
+        'change_amount',
         'points_earned',
     ];
 

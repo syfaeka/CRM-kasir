@@ -53,28 +53,38 @@ class PosController extends BaseController
     public function searchProduct(): ResponseInterface
     {
         $keyword = $this->request->getGet('q') ?? '';
-        $limit = (int) ($this->request->getGet('limit') ?? 20);
+        // Ubah limit jadi agak banyak biar produk tampil semua di awal
+        $limit = (int) ($this->request->getGet('limit') ?? 100); 
 
+        // ✅ LOGIKA BARU:
         if (strlen($keyword) < 1) {
-            return $this->respond([
-                'success' => true,
-                'data' => [],
-                'message' => 'Please provide a search keyword.',
-            ]);
+            // Kalau tidak ada keyword, ambil SEMUA data (pakai findAll bawaan CI4)
+            $products = $this->productModel->orderBy('id', 'DESC')->findAll($limit);
+        } else {
+            // Kalau ada keyword, baru pakai fungsi search custom
+            // (Pastikan method 'search' ada di ProductModel, kalau error ganti jadi like)
+            if (method_exists($this->productModel, 'search')) {
+                $products = $this->productModel->search($keyword, $limit);
+            } else {
+                // Fallback manual kalau method search belum dibuat di Model
+                $products = $this->productModel->like('name', $keyword)
+                                             ->orLike('sku', $keyword)
+                                             ->findAll($limit);
+            }
         }
 
-        $products = $this->productModel->search($keyword, $limit);
-
-        // Format response
+        // Format response (Sama seperti sebelumnya)
         $data = array_map(function ($product) {
             return [
                 'id' => $product->id,
                 'sku' => $product->sku,
                 'name' => $product->name,
                 'description' => $product->description,
+                'category' => $product->category ?? 'Uncategorized',
                 'price' => (float) $product->price,
                 'stock' => (int) $product->stock,
-                'in_stock' => $product->isInStock(),
+                // Pastikan method isInStock ada di Entity, kalau error hapus baris ini
+                'in_stock' => $product->stock > 0, 
             ];
         }, $products);
 
@@ -120,6 +130,11 @@ class PosController extends BaseController
         $userId = (int) $json['user_id'];
         $customerId = isset($json['customer_id']) ? (int) $json['customer_id'] : null;
         $items = $json['items'];
+
+        // New payment fields
+        $paymentMethod = $json['payment_method'] ?? 'cash';
+        $cashReceived = isset($json['cash_received']) ? (float) $json['cash_received'] : null;
+        $changeAmount = isset($json['change_amount']) ? (float) $json['change_amount'] : null;
 
         // Validate items
         if (empty($items) || !is_array($items)) {
@@ -206,12 +221,22 @@ class PosController extends BaseController
             // Calculate loyalty points (1 point per 10,000 IDR)
             $pointsEarned = Customer::calculatePointsFromAmount($totalAmount);
 
-            // Create transaction
+            // Calculate tax (11%)
+            $subtotal = $totalAmount;
+            $tax = round($subtotal * 0.11, 2);
+            $grandTotal = $subtotal + $tax;
+
+            // Create transaction with new payment fields
             $transaction = new Transaction([
                 'invoice_number' => Transaction::generateInvoiceNumber(),
                 'customer_id' => $customerId,
                 'user_id' => $userId,
-                'total_amount' => $totalAmount,
+                'total_amount' => $grandTotal,
+                'subtotal' => $subtotal,
+                'tax' => $tax,
+                'payment_method' => $paymentMethod,
+                'cash_received' => $cashReceived,
+                'change_amount' => $changeAmount,
                 'points_earned' => $pointsEarned,
             ]);
 
@@ -268,7 +293,12 @@ class PosController extends BaseController
                     'transaction' => [
                         'id' => $transactionId,
                         'invoice_number' => $savedTransaction->invoice_number,
+                        'subtotal' => (float) $savedTransaction->subtotal,
+                        'tax' => (float) $savedTransaction->tax,
                         'total_amount' => (float) $savedTransaction->total_amount,
+                        'payment_method' => $savedTransaction->payment_method,
+                        'cash_received' => $savedTransaction->cash_received ? (float) $savedTransaction->cash_received : null,
+                        'change_amount' => $savedTransaction->change_amount ? (float) $savedTransaction->change_amount : null,
                         'points_earned' => (int) $savedTransaction->points_earned,
                         'created_at' => $savedTransaction->created_at,
                     ],

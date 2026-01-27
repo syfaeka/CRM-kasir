@@ -17,6 +17,7 @@ class ProductModel extends Model
         'sku',
         'name',
         'description',
+        'category',
         'price',
         'stock',
     ];
