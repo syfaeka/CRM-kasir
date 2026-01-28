@@ -11,7 +11,7 @@
 
     <div class="card border-0 shadow-sm">
         <div class="card-body">
-            <form action="/admin/products" method="POST">
+            <form action="/admin/products" method="POST" enctype="multipart/form-data">
                 <?= csrf_field() ?>
 
                 <div class="row">
@@ -31,6 +31,14 @@
                     <label class="form-label fw-bold">Description</label>
                     <textarea name="description" class="form-control" rows="3" 
                               placeholder="Product description..."><?= old('description') ?></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Product Image</label>
+                    <input type="file" name="image" class="form-control" accept="image/*" onchange="previewImage(this)">
+                    <div class="mt-2">
+                        <img id="imagePreview" src="#" alt="Image Preview" style="max-width: 200px; display: none;" class="img-thumbnail">
+                    </div>
                 </div>
 
                 <div class="row">
@@ -54,4 +62,19 @@
         </div>
     </div>
 </div>
+<?= $this->endSection() ?>
+
+<?= $this->section('scripts') ?>
+<script>
+    function previewImage(input) {
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('imagePreview').src = e.target.result;
+                document.getElementById('imagePreview').style.display = 'block';
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+</script>
 <?= $this->endSection() ?>

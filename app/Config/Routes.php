@@ -19,6 +19,7 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
 
     // POS (Cashier)
     $routes->get('pos', 'PosController::index');
+    $routes->get('pos/receipt/(:num)', 'PosController::receipt/$1');
 
     // Admin Routes
     $routes->group('admin', static function ($routes) {

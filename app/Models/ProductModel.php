@@ -20,6 +20,7 @@ class ProductModel extends Model
         'category',
         'price',
         'stock',
+        'image',
     ];
 
     // Dates

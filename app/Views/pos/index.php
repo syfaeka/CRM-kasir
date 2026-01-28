@@ -460,6 +460,7 @@
         customerSelect: document.getElementById('customerSelect'),
         customerPointsBadge: document.getElementById('customerPointsBadge'),
         customerPoints: document.getElementById('customerPoints'),
+        btnConfirmPay: document.getElementById('btnConfirmPay'),
         // Modal
         paymentModal: new bootstrap.Modal(document.getElementById('paymentModal')),
         modalSubtotal: document.getElementById('modalSubtotal'),
@@ -483,7 +484,7 @@
     // Load Items
     async function loadProducts() {
         try {
-            const response = await fetch('/api/pos/products?limit=100'); // Load ample products
+            const response = await fetch('/api/pos/products?limit=100');
             const result = await response.json();
             if (result.success) {
                 state.products = result.data;
@@ -527,7 +528,10 @@
             card.innerHTML = `
                 <div class="card product-card h-100 ${!inStock ? 'opacity-50' : ''}" onclick="addToCart(${product.id})">
                     <div class="product-img-wrapper position-relative">
-                        <img src="https://placehold.co/200x200/png?text=${encodeURIComponent(product.name)}" alt="${product.name}">
+               <img 
+                    src="${product.image ? product.image : 'https://placehold.co/200x200/png?text=' + encodeURIComponent(product.name)}" 
+                    alt="${product.name}"
+                    style="width: 100%; height: 140px; object-fit: cover;">
                         <div class="product-badge">${product.category}</div>
                         ${!inStock ? '<div class="position-absolute w-100 h-100 bg-white bg-opacity-75 d-flex align-items-center justify-content-center fw-bold text-danger">OUT OF STOCK</div>' : ''}
                     </div>
@@ -544,7 +548,6 @@
             if (inStock) {
                 els.productGrid.appendChild(card);
             } else {
-                // Remove onclick if out of stock
                 card.querySelector('.product-card').onclick = null;
                 els.productGrid.appendChild(card);
             }
@@ -824,33 +827,42 @@
 
             if (response.ok) {
                 els.paymentModal.hide();
+               if (result.success) {
                 Swal.fire({
-                    icon: 'success',
                     title: 'Payment Successful!',
-                    text: `Invoice: ${result.data.transaction.invoice_number}`,
-                    showConfirmButton: true,
-                    confirmButtonText: 'New Order'
-                }).then(() => {
-                    // Reset
-                    state.cart = [];
-                    updateCartUI();
-                    loadProducts(); // Refresh stock
-                    els.customerSelect.value = '';
-                    els.customerPointsBadge.classList.add('d-none');
+                    text: `Change: ${formatRupiah(change)}`,
+                    icon: 'success',
+                    showConfirmButton: true,       
+                    confirmButtonText: 'Print Receipt & Finish', 
+                    allowOutsideClick: false
+                }).then((res) => {
+                    if (res.isConfirmed) {
+            window.open('/pos/receipt/' + result.data.transaction.id, '_blank', 'width=350,height=600');
+        }
+
+                state.cart = [];
+                updateCartUI();
+                els.paymentModal.hide();
+                loadProducts(); 
+                
+                els.cashReceived.value = '';
+                document.getElementById('changeAmount').textContent = 'Rp 0';
                 });
             } else {
-                throw new Error(result.message || JSON.stringify(result.messages));
+                Swal.fire('Failed', result.message || 'Checkout failed.', 'error');
             }
+                            }
+
         } catch (error) {
-            console.error(error);
-            Swal.fire('Checkout Failed', error.message, 'error');
+            console.error('Checkout error:', error);
+            Swal.fire('Error', 'An unexpected error occurred.', 'error');
         } finally {
             els.btnConfirmPay.disabled = false;
             els.btnConfirmPay.innerHTML = '<i class="fas fa-print me-2"></i> Print Receipt & Finish';
         }
     }
+    
 
-    // Start
     init();
 </script>
 <?= $this->endSection() ?>

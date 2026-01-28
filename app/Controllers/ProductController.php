@@ -46,6 +46,7 @@ class ProductController extends BaseController
             'price' => 'required|numeric|greater_than_equal_to[0]',
             'stock' => 'required|integer|greater_than_equal_to[0]',
             'description' => 'permit_empty',
+            'image' => 'permit_empty|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png]|max_size[image,2048]',
         ];
 
         if (!$this->validate($rules)) {
@@ -54,13 +55,23 @@ class ProductController extends BaseController
                 ->with('errors', $this->validator->getErrors());
         }
 
-        $product = new Product([
+        $productData = [
             'sku' => $this->request->getPost('sku'),
             'name' => $this->request->getPost('name'),
             'description' => $this->request->getPost('description'),
             'price' => $this->request->getPost('price'),
             'stock' => $this->request->getPost('stock'),
-        ]);
+        ];
+
+        // Handle image upload
+        $file = $this->request->getFile('image');
+        if ($file && $file->isValid() && !$file->hasMoved()) {
+            $newName = $file->getRandomName();
+            $file->move(FCPATH . 'uploads/products', $newName);
+            $productData['image'] = $newName;
+        }
+
+        $product = new Product($productData);
 
         if ($this->productModel->save($product)) {
             return redirect()->to('/admin/products')
@@ -109,6 +120,7 @@ class ProductController extends BaseController
             'price' => 'required|numeric|greater_than_equal_to[0]',
             'stock' => 'required|integer|greater_than_equal_to[0]',
             'description' => 'permit_empty',
+            'image' => 'permit_empty|is_image[image]|mime_in[image,image/jpg,image/jpeg,image/png]|max_size[image,2048]',
         ];
 
         if (!$this->validate($rules)) {
@@ -117,13 +129,31 @@ class ProductController extends BaseController
                 ->with('errors', $this->validator->getErrors());
         }
 
-        $product->fill([
+        $productData = [
             'sku' => $this->request->getPost('sku'),
             'name' => $this->request->getPost('name'),
             'description' => $this->request->getPost('description'),
             'price' => $this->request->getPost('price'),
             'stock' => $this->request->getPost('stock'),
-        ]);
+        ];
+
+        // Handle image upload
+        $file = $this->request->getFile('image');
+        if ($file && $file->isValid() && !$file->hasMoved()) {
+            // Delete old image if exists
+            if (!empty($product->image)) {
+                $oldImagePath = FCPATH . 'uploads/products/' . $product->image;
+                if (file_exists($oldImagePath)) {
+                    unlink($oldImagePath);
+                }
+            }
+
+            $newName = $file->getRandomName();
+            $file->move(FCPATH . 'uploads/products', $newName);
+            $productData['image'] = $newName;
+        }
+
+        $product->fill($productData);
 
         if ($this->productModel->save($product)) {
             return redirect()->to('/admin/products')
@@ -145,6 +175,14 @@ class ProductController extends BaseController
         if (!$product) {
             return redirect()->to('/admin/products')
                 ->with('error', 'Product not found.');
+        }
+
+        // Delete product image if exists
+        if (!empty($product->image)) {
+            $imagePath = FCPATH . 'uploads/products/' . $product->image;
+            if (file_exists($imagePath)) {
+                unlink($imagePath);
+            }
         }
 
         if ($this->productModel->delete($id)) {

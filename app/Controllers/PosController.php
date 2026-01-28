@@ -54,9 +54,8 @@ class PosController extends BaseController
     {
         $keyword = $this->request->getGet('q') ?? '';
         // Ubah limit jadi agak banyak biar produk tampil semua di awal
-        $limit = (int) ($this->request->getGet('limit') ?? 100); 
+        $limit = (int) ($this->request->getGet('limit') ?? 100);
 
-        // ✅ LOGIKA BARU:
         if (strlen($keyword) < 1) {
             // Kalau tidak ada keyword, ambil SEMUA data (pakai findAll bawaan CI4)
             $products = $this->productModel->orderBy('id', 'DESC')->findAll($limit);
@@ -68,13 +67,16 @@ class PosController extends BaseController
             } else {
                 // Fallback manual kalau method search belum dibuat di Model
                 $products = $this->productModel->like('name', $keyword)
-                                             ->orLike('sku', $keyword)
-                                             ->findAll($limit);
+                    ->orLike('sku', $keyword)
+                    ->findAll($limit);
             }
         }
 
         // Format response (Sama seperti sebelumnya)
         $data = array_map(function ($product) {
+            $imageUrl = (isset($product->image) && !empty($product->image)) 
+                ? base_url('uploads/products/' . $product->image) 
+                : null;
             return [
                 'id' => $product->id,
                 'sku' => $product->sku,
@@ -83,8 +85,8 @@ class PosController extends BaseController
                 'category' => $product->category ?? 'Uncategorized',
                 'price' => (float) $product->price,
                 'stock' => (int) $product->stock,
-                // Pastikan method isInStock ada di Entity, kalau error hapus baris ini
-                'in_stock' => $product->stock > 0, 
+                'image' => $imageUrl,
+                'in_stock' => $product->stock > 0,
             ];
         }, $products);
 
@@ -418,5 +420,48 @@ class PosController extends BaseController
                 }, $detailsWithProducts),
             ],
         ]);
+    }
+
+    /**
+     * Display receipt view for a transaction
+     * 
+     * GET /pos/receipt/{id}
+     * 
+     * @param int $id Transaction ID
+     * @return string|ResponseInterface
+     */
+    public function receipt(int $id)
+    {
+        // Get full transaction details
+        $data = $this->transactionModel->getWithDetails($id);
+
+        if (!$data || !$data['transaction']) {
+            return redirect()->to('/pos')->with('error', 'Transaction not found.');
+        }
+
+        // Get details with products
+        $detailsWithProducts = $this->transactionDetailModel->getDetailsWithProducts($id);
+
+        // Format items for the view
+        $items = array_map(function ($item) {
+            return [
+                'id' => $item['detail']->id,
+                'product_id' => $item['detail']->product_id,
+                'sku' => $item['product']->sku,
+                'name' => $item['product']->name,
+                'quantity' => (int) $item['detail']->quantity,
+                'unit_price' => (float) $item['detail']->unit_price,
+                'subtotal' => (float) $item['detail']->subtotal,
+            ];
+        }, $detailsWithProducts);
+
+        $viewData = [
+            'transaction' => $data['transaction'],
+            'customer' => $data['customer'],
+            'cashier' => $data['user'],
+            'items' => $items,
+        ];
+
+        return view('pos/receipt', $viewData);
     }
 }
