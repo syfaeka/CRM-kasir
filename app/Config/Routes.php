@@ -39,6 +39,13 @@ $routes->group('', ['filter' => 'auth'], static function ($routes) {
         $routes->get('customers/(:num)/edit', 'CustomerController::edit/$1');
         $routes->post('customers/(:num)', 'CustomerController::update/$1');
         $routes->post('customers/(:num)/delete', 'CustomerController::delete/$1');
+
+        // Transaction History
+        $routes->get('transactions', 'Admin\\TransactionController::index');
+        $routes->get('transactions/(:num)', 'Admin\\TransactionController::show/$1');
+
+        // Stock Management
+        $routes->post('products/(:num)/add-stock', 'ProductController::addStock/$1');
     });
 });
 

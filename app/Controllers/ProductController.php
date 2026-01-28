@@ -166,6 +166,74 @@ class ProductController extends BaseController
     }
 
     /**
+     * Add stock to product (restock)
+     */
+    public function addStock(int $id): ResponseInterface
+    {
+        $product = $this->productModel->find($id);
+
+        if (!$product) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Product not found.',
+            ])->setStatusCode(404);
+        }
+
+        // Validation
+        $rules = [
+            'quantity' => 'required|integer|greater_than[0]',
+            'note' => 'permit_empty|max_length[500]',
+        ];
+
+        if (!$this->validate($rules)) {
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => 'Validation failed.',
+                'errors' => $this->validator->getErrors(),
+            ])->setStatusCode(400);
+        }
+
+        $quantity = (int) $this->request->getPost('quantity');
+        $note = $this->request->getPost('note') ?? 'Stock added via admin panel';
+
+        $db = \Config\Database::connect();
+        $db->transStart();
+
+        try {
+            // Increment product stock
+            if (!$this->productModel->addStock($id, $quantity)) {
+                throw new \Exception('Failed to update product stock.');
+            }
+
+            // Log stock mutation
+            $stockLogModel = model(\App\Models\StockLogModel::class);
+            if (!$stockLogModel->logStockIn($id, $quantity, $note)) {
+                throw new \Exception('Failed to log stock mutation.');
+            }
+
+            $db->transComplete();
+
+            if ($db->transStatus() === false) {
+                throw new \Exception('Transaction failed.');
+            }
+
+            return $this->response->setJSON([
+                'success' => true,
+                'message' => "Successfully added {$quantity} units to stock.",
+                'data' => [
+                    'new_stock' => $this->productModel->find($id)->stock,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            $db->transRollback();
+            return $this->response->setJSON([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ])->setStatusCode(500);
+        }
+    }
+
+    /**
      * Delete product
      */
     public function delete(int $id): ResponseInterface
